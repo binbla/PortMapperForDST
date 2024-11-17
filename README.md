@@ -30,5 +30,68 @@ Fork From : [TinyPortMapper](https://github.com/wangyu-/tinyPortMapper)
 
 # 东西在哪儿？
 
-Github页面的右边，有个大大的Releases，下面有个绿色的Latest，点一下，然后下载dstPortMapperClient.exe
+Github页面的右边，有个大大的Releases，下面有个绿色的Latest，点一下，然后下载dstPortMapperClient.zip,解压就得到了exe文件。
+
+# 计划
+
+目前只做了傻瓜式客户端。服务端倒是也可以写，但是一个合格的腐竹并不需要这么照顾。
+
+对于腐竹，我也可以分享下小玩意儿，这是很久之前写的,这个程序通过fork的方式去启动/usr/local/bin/tinymapper_amd64
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#define MAX_IP_LEN 100
+int main(int argv, char* args[]) {
+  pid_t sub_process_id = 0;
+  FILE* fp = NULL;
+  char ip[MAX_IP_LEN] = {0};
+  char *getIPcmd = "ip a | grep inet6 | grep global | grep -v fd00 | awk '{print $2}' | sed 's#/128##'";
+  char remote_ip_port1[120] = {0},remote_ip_port2[120] = {0};
+  char* exe_bin = "/usr/local/bin/tinymapper_amd64";
+  
+  fp = popen(getIPcmd,"r");
+  if (fgets(ip, sizeof(ip), fp) == NULL) {
+    printf("Wrong with command.\n");
+  } else {
+    ip[strcspn(ip, "\n")] = '\0';
+    printf("获取到的IPv6地址为：%s\n", ip);
+  }
+  sprintf(remote_ip_port1,"[%s]:10999",ip);
+  sprintf(remote_ip_port2,"[%s]:10998",ip);
+  sub_process_id = fork();
+  if (sub_process_id < 0) {
+    // 错误
+    printf("Fork Failed!\n");
+  } else if (sub_process_id == 0) {
+    // 父进程
+    char * args[] = {exe_bin,"-l","127.0.0.1:10999","-r",remote_ip_port1,"-u", NULL};
+    printf("父进程:cmd1\n");
+    execv(exe_bin,args);
+  } else {
+    // 子进程
+    sleep(1);
+    char * args[] = {exe_bin,"-l","127.0.0.1:10998","-r",remote_ip_port2,"-u", NULL};
+    printf("子进程:cmd2\n");
+    execv(exe_bin,args);
+  }
+  return 0;
+}
+```
+然后再写个systemd unit去启用就可以了
+```
+#/etc/systemd/system/dstnat64.service
+[Unit]
+Description=dst nat64
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/bla/crontab/dstnat64
+
+[Install]
+WantedBy=default.target
+```
 
