@@ -1,91 +1,34 @@
-# tinyPortMapper (or tinyPortForwarder)
-A Lightweight High-Performance Port Mapping/Forwarding Utility using epoll, Supports both TCP and UDP 
+# 这是什么？
 
-# Supported Platforms
-Linux host (including desktop Linux,Android phone/tablet, OpenWRT router, or Raspberry PI). Binaries of `amd64` `x86` `mips_be` `mips_le` `arm` are provided.
+Fork From : [TinyPortMapper](https://github.com/wangyu-/tinyPortMapper)
 
-# Getting Started
+简单来说就是一个端口映射工具，饥荒连接板到现在还不官方支持IPv6直连，但我们有一些特殊的方式去完成这件事情，相当于nat64啦。
 
-### Installing
+关键词: 饥荒联机版、IPv6、直连
 
-Download binary release from https://github.com/wangyu-/tinyPortMapper/releases
+# 需要怎么做？
 
-### Running
-Assume you want to map/forward local port 1234 to 10.222.2.1:443
-```
-# for both TCP and UDP
-./tinymapper_amd64 -l0.0.0.0:1234 -r10.222.2.1:443 -t -u
+## 服务端
 
-# for TCP only
-./tinymapper_amd64 -l0.0.0.0:1234 -r10.222.2.1:443 -t
+搭建好服务器，确认有IPv6公网，确认防火墙允许饥荒联机版默认端口10999和10998通行。
 
-# for UDP only
-./tinymapper_amd64 -l0.0.0.0:1234 -r10.222.2.1:443 -u
+然后使用tinyportmapper去做一个端口映射，对于搭服务器的人来说，这点技术操作属于毛毛雨啦
 
-# for ipv6, both TCP and UDP
-# ipv6 address must be surrounded with `[]`, ipv4 address must NOT be surrounded with `[]`
-./tinymapper_amd64 -l[::]:1234 -r[2001:19f0:7001:1111:00:ff:11:22]:443 -t -u
-```
+## 客户端
 
-##### NOTE
-```
-# local port and remote port can be the same
-./tinymapper_amd64 -l0.0.0.0:443 -r10.222.2.1:443 -u
+但是，服务器自然有懂Linux的玩家去操心，但你要让**好不容易拉过来的朋友**通过一系列对他来说超级复杂的操作才能跟你联机一起玩。他可能就*下次一定*了。
 
-# you can also use 6-to-4 or 4-to-6 forward
-./tinymapper_amd64 -l0.0.0.0:1234 -r[2001:19f0:7001:1111:00:ff:11:22]:443 -t -u
-./tinymapper_amd64 -l[::]:1234 -r44.55.66.77:443 -t -u
+所以，我在好哥哥wangyu-的开源代码上修改了一下下，有了这个小软件，你的好朋友只需要双击一下就完成了客户端的端口映射。
 
-# you can also use ipv4-mapped ipv6 address
-# this is especially useful if you want to play with ipv6 and you dont have a real ipv6 address
-./tinymapper_amd64 -l[::]:4433 -r[::ffff:10.222.2.1]:443 -t -u
-./tinymapper_amd64 -l[::ffff:0.0.0.0]:4433 -r[::ffff:10.222.2.1]:443 -t -u
-```
-# Options
-```
-tinyPortMapper
-git version:25ea4ec047    build date:Nov  4 2017 22:55:23
-repository: https://github.com/wangyu-/tinyPortMapper
+当然，默认域名是我自己的域名，你要是想修改默认域名自己下载我这里的源码，改main.cpp里面的默认值，然后使用命令`make mingw_cross`（Ubuntu下要安装mingw-w64）重新编译一下就行。
 
-usage:
-    ./this_program  -l <listen_ip>:<listen_port> -r <remote_ip>:<remote_port>  [options]
+如果重新编译一下对你来说也有点困难，那么你可以让你的朋友再麻烦那么一丢丢，下载这个软件，在软件所在的目录按住shift+鼠标右键，选择“在此处打开PowerShell”或者"Open in Terminal"就能在当前文件夹打开终端，然后输入`./dstPortMapperClient.exe [domain]`，将domain换成你自己的域名就可以啦。
 
-main options:
-    -t                                    enable TCP forwarding/mapping
-    -u                                    enable UDP forwarding/mapping
+然后，你的好哥们就可以打开游戏，进入大厅按键盘上的`~`键，输入连接命令`c_connect("127.0.0.1")`回车就可以进房间咯。
 
-other options:
-    --sock-buf            <number>        buf size for socket, >=10 and <=10240, unit: kbyte, default: 1024
-    --log-level           <number>        0: never    1: fatal   2: error   3: warn
-                                          4: info (default)      5: debug   6: trace
-    --log-position                        enable file name, function name, line number in log
-    --disable-color                       disable log color
-    -h,--help                             print this help message
-```
 
-# Peformance Test
-```
-root@debian9:~# iperf3 -c 127.0.0.1 -p5202
-Connecting to host 127.0.0.1, port 5202
-[  4] local 127.0.0.1 port 37604 connected to 127.0.0.1 port 5202
-[ ID] Interval           Transfer     Bandwidth       Retr  Cwnd
-[  4]   0.00-1.00   sec   696 MBytes  5.84 Gbits/sec    0    639 KBytes
-[  4]   1.00-2.00   sec   854 MBytes  7.17 Gbits/sec    0    639 KBytes
-[  4]   2.00-3.00   sec   727 MBytes  6.10 Gbits/sec    0    639 KBytes
-[  4]   3.00-4.00   sec   670 MBytes  5.62 Gbits/sec    0    639 KBytes
-[  4]   4.00-5.00   sec   644 MBytes  5.40 Gbits/sec    0    639 KBytes
-[  4]   5.00-6.00   sec   957 MBytes  8.03 Gbits/sec    0    639 KBytes
-[  4]   6.00-7.00   sec   738 MBytes  6.19 Gbits/sec    0    639 KBytes
-[  4]   7.00-8.00   sec   714 MBytes  5.99 Gbits/sec    0    639 KBytes
-[  4]   8.00-9.00   sec   817 MBytes  6.85 Gbits/sec    0    639 KBytes
-[  4]   9.00-10.00  sec   619 MBytes  5.19 Gbits/sec    0    639 KBytes
-- - - - - - - - - - - - - - - - - - - - - - - - -
-[ ID] Interval           Transfer     Bandwidth       Retr
-[  4]   0.00-10.00  sec  7.26 GBytes  6.24 Gbits/sec    0             sender
-[  4]   0.00-10.00  sec  7.26 GBytes  6.24 Gbits/sec                  receiver
 
-```
+# 东西在哪儿？
 
-#### Details and more test results at:
+Github页面的右边，有个大大的Releases，下面有个绿色的Latest，点一下，然后下载dstPortMapperClient.exe
 
-https://github.com/wangyu-/tinyPortMapper/wiki/Performance-Test
