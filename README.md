@@ -6,6 +6,9 @@ Fork From : [TinyPortMapper](https://github.com/wangyu-/tinyPortMapper)
 
 关键词: 饥荒联机版、IPv6、直连
 
+工作原理：服务器上面的饥荒联机版只能监听IPv4地址，也就是说，当服务器启动完成后，客户端只能通过IPv4的方式去连接服务器。但是，我们可以做一层小小的转发，我们把送到服务器IPv6地址上10999端口的流量送到IPv4的10999去，IPv6地址上10998端口的流量送到IPv4的10998去，不就可以了。当然，只有服务器做这一层转发是不行的，因为客户端的流量也只能往IPv4上发啊，所以客户端也需要做一层转发，将IPv4的流量送到IPv6上去。
+![图片](https://github.com/user-attachments/assets/69f54a96-c28d-46ed-817c-24424d7411a5)
+
 # 需要怎么做？
 
 ## 服务端
@@ -13,6 +16,7 @@ Fork From : [TinyPortMapper](https://github.com/wangyu-/tinyPortMapper)
 搭建好服务器，确认有IPv6公网，确认防火墙允许饥荒联机版默认端口10999和10998通行。
 
 然后使用tinyportmapper去做一个端口映射，对于搭服务器的人来说，这点技术操作属于毛毛雨啦
+
 
 ## 客户端
 
@@ -30,7 +34,8 @@ Fork From : [TinyPortMapper](https://github.com/wangyu-/tinyPortMapper)
 
 # 东西在哪儿？
 
-Github页面的右边，有个大大的Releases，下面有个绿色的Latest，点一下，然后下载dstPortMapperClient.zip,解压就得到了exe文件。
+右边下载Releases：dstPortMapperClient.zip,解压就得到了exe文件。
+或者点[下载连接](https://github.com/binbla/PortMapperForDST/releases/download/publish/tinymapper.zip)
 
 # 计划
 
