@@ -2,6 +2,14 @@
 #include "log.h"
 #include "git_version.h"
 #include "fd_manager.h"
+#define DOMAIN_MAX_LEN 64
+// 跨平台多进程支持
+#ifdef _WIN32
+    #include <windows.h>
+#else
+    #include <unistd.h>
+    #include <sys/wait.h>
+#endif
 
 using  namespace std;
 
@@ -1059,6 +1067,107 @@ int unit_test()
 	return 0;
 }
 
+int resolve_ipv6(char *domain, char *addr) {
+    struct addrinfo hints, *res;
+    int err;
+
+#ifdef _WIN32
+    WSADATA wsaData;
+    // 初始化 Winsock
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        fprintf(stderr, "WSAStartup failed\n");
+        return -1;
+    }
+#endif
+
+    // 清空 hints 结构体并设置为查询 IPv6
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET6;  // 设置为 IPv6
+
+    // 调用 getaddrinfo 进行解析
+    err = getaddrinfo(domain, NULL, &hints, &res);
+    if (err != 0) {
+        fprintf(stderr, "getaddrinfo failed: %s\n", gai_strerror(err));
+#ifdef _WIN32
+        WSACleanup();  // 清理 Winsock
+#endif
+        return -1;
+    }
+
+    // 将解析出的 IPv6 地址转换为字符串格式
+    if (res != NULL) {
+        struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)res->ai_addr;
+        inet_ntop(AF_INET6, &ipv6->sin6_addr, addr, INET6_ADDRSTRLEN);
+    }
+
+    // 释放内存
+    freeaddrinfo(res);
+
+#ifdef _WIN32
+    WSACleanup();  // 清理 Winsock
+#endif
+
+    return 0;
+}
+
+#ifdef _WIN32
+// Windows 平台的子进程创建函数
+void create_child_process(const char *program_name, const char *addr, u32_t port, HANDLE job_handle, HANDLE hPipeWrite) {
+    // 创建命令行参数
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "%s -l 127.0.0.1:%d -r [%s]:%d -u", program_name, port, addr, port);
+
+    // 转换为宽字符
+    wchar_t wcmd[256];
+    MultiByteToWideChar(CP_UTF8, 0, cmd, -1, wcmd, 256);
+
+    // 设置启动信息，重定向子进程的 stdout 到管道的写端
+    STARTUPINFOW si = {sizeof(si)};
+    PROCESS_INFORMATION pi = {0};
+    si.hStdOutput = hPipeWrite; // 将子进程的 stdout 重定向到管道
+    si.dwFlags |= STARTF_USESTDHANDLES;
+
+    // 启动子进程
+    if (!CreateProcessW(NULL, wcmd, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+        fprintf(stderr, "Failed to create process for port %d. Error: %lu\n", port, GetLastError());
+        exit(1);
+    }
+
+    // 将子进程添加到 Job Object 中
+    if (!AssignProcessToJobObject(job_handle, pi.hProcess)) {
+        fprintf(stderr, "Failed to assign process to job object. Error: %lu\n", GetLastError());
+        exit(1);
+    }
+
+    // 确保子进程句柄关闭，避免资源泄露
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+}
+#else
+// Unix/Linux 平台的子进程创建函数
+void create_child_process(const char *program_name, const char *addr,int port) {
+	// 未实现！！！
+	// 相信会玩Linux的也不差这点命令执行功底吧。。
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork failed");
+        exit(1);
+    } else if (pid == 0) {
+        // 子进程
+        printf("Child process started for port %s\n", port);
+		char * argv = malloc(sizeof(char)*1024);
+		sprintf(argv,"%s -l 127.0.0.1:%d -r [%s]:%d -u",program_name,port,port,addr,port);
+        execlp(program_name, program_name, port, NULL);
+        // 如果 execlp 返回，说明失败
+        perror("execlp failed");
+        exit(1);
+    } else {
+        // 父进程保存子进程 PID，以便稍后终止
+        printf("Child process PID: %d\n", pid);
+    }
+}
+#endif
+
 int main(int argc, char *argv[])
 {
     init_ws();
@@ -1089,9 +1198,86 @@ int main(int argc, char *argv[])
 	assert(sizeof(i32_t)==4);
 	dup2(1, 2);		//redirect stderr to stdout
 	int i, j, k;
-	process_arg(argc,argv);
-
-	event_loop();
-
-	return 0;
+	
+	// 定义默认参数，你可以在这里完成你的自定义，比如默认域名或端口
+	const char * defaultDomain = "kore.host";
+	u32_t port1 = 10999;
+	u32_t port2 = 10998;
+	// start --------------
+	char *domain;
+	// 中文输出 设置控制台编码UTF-8
+	SetConsoleOutputCP(CP_UTF8);
+	if(argc <3){ // 主进程逻辑
+		puts("----------*****----------");
+		puts("这是一个在原版(wangyu-/tinyPortMapper)基础上修改过的程序,目的是提供饥荒联机版的IPv6端口映射方式完成直连，以显著降低联机时延。\n");
+		puts("你可以使用原版的参数列表，也可以使用快捷映射命令：./dstClientPortMapper.exe [domain] ");
+		puts("如果你双击直接运行（不输入参数），则将使用域名 \"kore.host\" 作为缺省参数。");
+		puts("该命令将会把域名的10999和10998端口映射到本地127.0.0.1地址上。进入饥荒联机版以后可以按'~'唤出控制台，输入 c_connect(\"127.0.0.1\") 然后回车即可\n");
+		puts("直接关闭窗口即可结束映射。感谢你的使用。");
+		puts("如果有侵权问题，请联系我。https://github.com/binbla\n");
+		puts("如果你想要完成自己的修改，自己读源码吧。😋\n");
+		puts("----------*****----------");
+		if(argc == 1){
+			domain = (char*)malloc(sizeof(char)*DOMAIN_MAX_LEN);
+			strcpy(domain,defaultDomain);// 默认域名
+			printf("use default domain: %s\n",defaultDomain);
+		}else{
+			domain = argv[1];
+		}
+		// 域名解析
+		char addr[INET6_ADDRSTRLEN];
+		if (resolve_ipv6(domain, addr) == 0) {
+        	printf("IPv6 address for %s: %s\n", domain, addr);
+    	} else {
+			printf("Failed to resolve IPv6 address for %s\n", domain);
+			exit(-1);
+		}
+		printf("Parent process started.\n");
+#ifdef _WIN32 //windows 逻辑
+		// 创建一个 Job Object 来管理所有子进程
+		HANDLE job_handle = CreateJobObject(NULL, NULL);
+		if (job_handle == NULL) {
+			fprintf(stderr, "Failed to create job object. Error: %lu\n", GetLastError());
+			exit(1);
+		}
+		// 创建管道，父进程从中读取数据
+        HANDLE hPipeRead, hPipeWrite;
+        SECURITY_ATTRIBUTES sa = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
+        if (!CreatePipe(&hPipeRead, &hPipeWrite, &sa, 0)) {
+            fprintf(stderr, "CreatePipe failed\n");
+            exit(1);
+        }
+		// 创建子进程并将它们添加到 Job Object 中
+        create_child_process(argv[0], addr, port1, job_handle, hPipeWrite);
+        create_child_process(argv[0], addr, port2, job_handle, hPipeWrite);
+		// 父进程从管道读取并输出
+        CloseHandle(hPipeWrite);  // 关闭管道的写端
+        char buf[256];
+        DWORD bytesRead;
+        while (ReadFile(hPipeRead, buf, sizeof(buf) - 1, &bytesRead, NULL) && bytesRead > 0) {
+            buf[bytesRead] = '\0';  // 添加 null 终止符
+            printf("%s", buf);      // 打印子进程的输出
+        }
+		
+		// 父进程等待子进程退出
+		WaitForSingleObject(job_handle, INFINITE);
+		// 清理 Job Object
+		CloseHandle(job_handle);
+#else	//unix 逻辑
+		// 创建两个子进程
+		create_child_process(argv[0], addr,port1);
+		sleep(1);
+		create_child_process(argv[0], addr,port2);
+		// 父进程等待所有子进程退出（通过发送信号终止）
+		// 父进程等待子进程（仅 Unix/Linux 需要，Windows 子进程生命周期与父进程绑定）
+		while (wait(NULL) > 0); // 等待所有子进程退出
+#endif
+    	printf("Parent process exiting\n");
+    	return 0;
+	}else{// 子进程逻辑
+		printf("Child process started\n");
+        process_arg(argc,argv);
+		event_loop();
+        return 0;
+	}
 }
