@@ -1276,8 +1276,8 @@ int main(int argc, char *argv[])
     	return 0;
 	}else{// 子进程逻辑
 		printf("Child process started\n");
-        process_arg(argc,argv);
+        	process_arg(argc,argv);
 		event_loop();
-        return 0;
+        	return 0;
 	}
 }
