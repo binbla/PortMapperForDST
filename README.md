@@ -2,7 +2,7 @@
 
 Fork From : [TinyPortMapper](https://github.com/wangyu-/tinyPortMapper)
 
-简单来说就是一个端口映射工具，饥荒连接板到现在还不官方支持IPv6直连，但我们有一些特殊的方式去完成这件事情，相当于nat64啦。
+简单来说就是一个端口映射工具，饥荒连接版到现在还不官方支持IPv6直连，但我们有一些特殊的方式去完成这件事情，相当于nat64啦。
 
 关键词: 饥荒联机版、IPv6、直连
 
